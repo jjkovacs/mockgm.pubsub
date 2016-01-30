@@ -29,6 +29,16 @@ function Communication() {
 	})();
 	
 	function sendToApp(appId, length, data) {
+		if(typeof data !== 'string') {
+			throw new Error('Invalid parameter -- "data" must be valid stringified json.');
+		}
+		
+		try {
+			JSON.parse(data);
+		} catch(error) {
+			throw new Error('Invalid parameter -- "data" must be valid stringified json.');
+		}
+		
 		pubsubService.publish({
 			channel: getChannel(appId),
 			message: {
