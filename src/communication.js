@@ -29,6 +29,10 @@ function Communication() {
 	})();
 	
 	function sendToApp(appId, length, data) {
+		if(typeof appId !== 'number' || appId <= 0) {
+			throw new Error('Invalid parameter -- "appId" must be a positive integer.');
+		}
+		
 		if(typeof data !== 'string') {
 			throw new Error('Invalid parameter -- "data" must be valid stringified json.');
 		}

@@ -23,7 +23,7 @@ function DataWatcherService() {
 	
 	function removeHandler(id) {
 		if(!id || typeof id !== 'number') {
-			throw new Error('Invalid parameter -- "handle" must be a valid callback handle.');
+			throw new Error('Invalid parameter -- "id" must be a valid callback handle.');
 		}
 		
 		if(!handlers[id]) {

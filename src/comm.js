@@ -14,6 +14,9 @@ function Comm() {
 	}
 	
 	function watchForData(callback) {
+		if(!callback || typeof callback !== 'function') {
+			throw new Error('Invalid parameter -- "callback" must be a function.');
+		}
 		
 		var handleId = dataWatcherService.addHandler(callback);
 		
@@ -28,6 +31,10 @@ function Comm() {
 	}
 	
 	function clearWatchForData(handle) {
+		if(!handle || typeof handle !== 'number') {
+			throw new Error('Invalid parameter -- "handle" must be a valid callback handle.');
+		}
+		
 		dataWatcherService.removeHandler(handle);
 	}
 }

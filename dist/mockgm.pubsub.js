@@ -3686,6 +3686,9 @@ function Comm() {
 	}
 	
 	function watchForData(callback) {
+		if(!callback || typeof callback !== 'function') {
+			throw new Error('Invalid parameter -- "callback" must be a function.');
+		}
 		
 		var handleId = dataWatcherService.addHandler(callback);
 		
@@ -3700,6 +3703,10 @@ function Comm() {
 	}
 	
 	function clearWatchForData(handle) {
+		if(!handle || typeof handle !== 'number') {
+			throw new Error('Invalid parameter -- "handle" must be a valid callback handle.');
+		}
+		
 		dataWatcherService.removeHandler(handle);
 	}
 }
@@ -3737,6 +3744,10 @@ function Communication() {
 	})();
 	
 	function sendToApp(appId, length, data) {
+		if(typeof appId !== 'number' || appId <= 0) {
+			throw new Error('Invalid parameter -- "appId" must be a positive integer.');
+		}
+		
 		if(typeof data !== 'string') {
 			throw new Error('Invalid parameter -- "data" must be valid stringified json.');
 		}
@@ -3857,7 +3868,7 @@ function DataWatcherService() {
 	
 	function removeHandler(id) {
 		if(!id || typeof id !== 'number') {
-			throw new Error('Invalid parameter -- "handle" must be a valid callback handle.');
+			throw new Error('Invalid parameter -- "id" must be a valid callback handle.');
 		}
 		
 		if(!handlers[id]) {
