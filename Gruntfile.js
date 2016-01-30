@@ -24,7 +24,8 @@ module.exports = function (grunt) {
                 undef: true,
                 unused: true,
                 eqnull: true,
-                boss: true
+                boss: true,
+                predef: ['window']
             },
             gruntfile: {
                 src: 'gruntfile.js'

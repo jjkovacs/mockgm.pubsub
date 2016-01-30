@@ -966,7 +966,7 @@ process.umask = function() { return 0; };
 
 }).call(this,require('_process'))
 },{"_process":5,"events":3,"fs":2,"path":4}],7:[function(require,module,exports){
-// Version: 3.7.21
+// Version: 3.7.22
 /* ---------------------------------------------------------------------------
 --------------------------------------------------------------------------- */
 
@@ -1011,7 +1011,7 @@ var NOW             = 1
 ,   PARAMSBIT       = '&'
 ,   PRESENCE_HB_THRESHOLD = 5
 ,   PRESENCE_HB_DEFAULT  = 30
-,   SDK_VER         = '3.7.21'
+,   SDK_VER         = '3.7.22'
 ,   REPL            = /{([\w\-]+)}/g;
 
 /**
@@ -3181,7 +3181,7 @@ function crypto_obj() {
  * UTIL LOCALS
  */
 var NOW        = 1
-,    PNSDK      = 'PubNub-JS-' + 'Modern' + '/' + '3.7.21';
+,    PNSDK      = 'PubNub-JS-' + 'Modern' + '/' + '3.7.22';
 
 
 
@@ -3469,11 +3469,11 @@ function CREATE_PUBNUB(setup) {
     if (setup['notest']) return SELF;
 
     if (typeof(window) !== 'undefined'){
-        bind( 'offline', window,   SELF['_reset_offline'] );
+        bind( 'offline', window,   SELF['offline'] );
     }
 
     if (typeof(document) !== 'undefined'){
-        bind( 'offline', document, SELF['_reset_offline'] );
+        bind( 'offline', document, SELF['offline'] );
     }
 
     SELF['ready']();
@@ -3670,47 +3670,65 @@ CryptoJS.mode.ECB = (function () {
     return ECB;
 }());// Moved to hmac-sha-256.js
 },{}],8:[function(require,module,exports){
-var communication = require('./communication');
+var communication = require('./communication'),
+	dataWatcherService = require('./services/data-watcher-service');
 
 function Comm() {
-	var self = this;
+	var self = this,
+		watching = false;
 	
 	self.sendToApp = sendToApp;
 	self.watchForData = watchForData;
 	self.clearWatchForData = clearWatchForData;
 	
-	function sendToApp(msg) {
-		return communication.sendToApp(msg);
+	function sendToApp(appId, length, msg) {
+		return communication.sendToApp(appId, length, msg);
 	}
 	
 	function watchForData(callback) {
-		return communication.watchForData(callback);
+		
+		var handleId = dataWatcherService.addHandler(callback);
+		
+		// dont register the internal watcher until comm.watchForData has been called.
+		// this mimicks App0's behavior.
+		if(!watching) {
+			communication.watchForData(dataWatcherService.dataReceiver);
+			watching = true;
+		}
+		
+		return handleId;
 	}
 	
 	function clearWatchForData(handle) {
-		return communication.clearWatchForData(handle);
+		dataWatcherService.removeHandler(handle);
 	}
 }
 
 module.exports = new Comm();
-},{"./communication":9}],9:[function(require,module,exports){
-var pubnub = require('./services/pubnub-service'),
+},{"./communication":9,"./services/data-watcher-service":11}],9:[function(require,module,exports){
+var pubsubService = require('./services/pubsub-service'),
 	localEnvironmentProvider = require('./providers/local-environment-provider');
 
 function Communication() {
-	var self = this;
+	var self = this,
+		parentAppId,
+		handlerCounter = 0,
+		handler; // per the gm framework's implementation, we only support one subscribed watcher
 	
 	self.sendToApp = sendToApp;
 	self.watchForData = watchForData;
+	self.clearWatchForData = clearWatchForData;
 	
 	(function init() {
-		var localAppEnvironment = localEnvironmentProvider.get();
+		parentAppId = window.ngiAppId;
 		
-		pubnub.subscribe({
-			channel: localAppEnvironment.id,
-			message: function(message){
-				console.log(message);
-			},
+		if(!parentAppId) {
+			throw new Error('Failed to initialize the communication service. You must specify this app\'s ID at "window.ngiAppId".');
+		}
+		
+		pubsubService.subscribe({
+			channel: getChannel(parentAppId),
+			message: receiveMessage,
 			connect: log.bind(null, 'Communication Service Connected'),
 			disconnect: log.bind(null, 'Communication Service Disconnected'),
 			reconnect: log.bind(null, 'Communication Service Reconnected'),
@@ -3718,12 +3736,45 @@ function Communication() {
 		});
 	})();
 	
-	function sendToApp() {
-		throw new Error('Not Implemented');
+	function sendToApp(appId, length, data) {
+		pubsubService.publish({
+			channel: getChannel(appId),
+			message: {
+				senderID: parentAppId,
+				data: data
+			}
+		});
 	}
 	
-	function watchForData() {
-		throw new Error('Not Implemented');
+	function watchForData(callback) {
+		handler = callback;
+		
+		return ++handlerCounter;
+	}
+	
+	function clearWatchForData(id) {
+		if(id !== handlerCounter) {
+			// not sure what the framework does if you pass in a handler ID that
+			// doesn't correspond to the currently subscribed handler, since you can only have one
+			throw new Error('No handler with id "' + id + '" exists.');
+		}
+		
+		handler = null;
+	}
+	
+	function receiveMessage(message) {
+		if(!handler) {
+			console.log('Received a message, but no handlers are subscribed.', message);
+			return;
+		}
+		
+		handler(message);
+	}
+	
+	function getChannel(appId) {
+		var localAppEnvironment = localEnvironmentProvider.get();
+		
+		return localAppEnvironment.id + '|' + appId;
 	}
 	
 	function log(msg, msg2) {
@@ -3732,9 +3783,9 @@ function Communication() {
 }
 
 module.exports = new Communication();
-},{"./providers/local-environment-provider":10,"./services/pubnub-service":11}],10:[function(require,module,exports){
-var pubnub = require('../services/pubnub-service'),
-	localStorage = localStorage || new (require('node-localstorage').LocalStorage)('./localstorage');
+},{"./providers/local-environment-provider":10,"./services/pubsub-service":12}],10:[function(require,module,exports){
+var pubsubService = require('../services/pubsub-service'),
+	localStorage = window.localStorage || new (require('node-localstorage').LocalStorage)('./localstorage');
 
 function LocalEnvironmentProvider() {
 	var self = this,
@@ -3747,7 +3798,7 @@ function LocalEnvironmentProvider() {
 		
 		if(!localEnvironmentInfo) {
 			localEnvironmentInfo = {
-				id: pubnub.uuid()
+				id: pubsubService.uuid()
 			};
 			
 			try {
@@ -3770,14 +3821,91 @@ function LocalEnvironmentProvider() {
 }
 
 module.exports = new LocalEnvironmentProvider();
-},{"../services/pubnub-service":11,"node-localstorage":6}],11:[function(require,module,exports){
+},{"../services/pubsub-service":12,"node-localstorage":6}],11:[function(require,module,exports){
+
+
+function DataWatcherService() {
+	var self = this,
+		handlerCounter = 0,
+		handlers = {};
+		
+	self.addHandler = addHandler;
+	self.removeHandler = removeHandler;
+	self.dataReceiver = dataReceiver;
+	
+	function addHandler(callback) {
+		if(!callback || typeof callback !== 'function') {
+			throw new Error('Invalid parameter -- "callback" must be a function.');
+		}
+		
+		var id = ++handlerCounter;
+		
+		handlers[id] = callback;
+		
+		return id;
+	}
+	
+	function removeHandler(id) {
+		if(!id || typeof id !== 'number') {
+			throw new Error('Invalid parameter -- "handle" must be a valid callback handle.');
+		}
+		
+		if(!handlers[id]) {
+			throw new Error('No handler with id "' + id + '" exists.');
+		}
+		
+		delete handlers[id];
+	}
+	
+	function dataReceiver(data) {
+		for(var key in handlers) {
+			var handler = handlers[key];
+			
+			try {
+				handler(data);
+			} catch(error) {
+				console.error('An unhandled error occurred in watchForData handler ' + key + '.', error);
+			}
+		}
+	}
+}
+
+module.exports = new DataWatcherService();
+},{}],12:[function(require,module,exports){
 var pubnub = require('pubnub'),
 	PUBLISHKEY = 'pub-c-ce05588f-4a03-446c-aacc-159f8a18b3d3',
 	SUBSCRIBEKEY = 'sub-c-a898c26a-c62f-11e5-a316-0619f8945a4f';
+	
+function PubSubService() {
+	var self = this,
+		pubnubInst;
+	
+	self.subscribe = subscribe;
+	self.publish = publish;
+	self.uuid = uuid;
+	
+	(function init() {
+		pubnubInst = pubnub({
+			publish_key: PUBLISHKEY,
+			subscribe_key: SUBSCRIBEKEY
+		});
+	})();
+	
+	function subscribe(options) {
+		return pubnubInst.subscribe(options);
+	}
+	
+	function publish(options) {
+		options.publish_key = PUBLISHKEY;
+		
+		return pubnubInst.publish(options);
+	}
+	
+	function uuid() {
+		return pubnubInst.uuid();
+	}
+}
 
-module.exports = pubnub({
-		publish_key: PUBLISHKEY,
-		subscribe_key: SUBSCRIBEKEY
-	});
+module.exports = new PubSubService();
 },{"pubnub":7}]},{},[1])(1)
 });

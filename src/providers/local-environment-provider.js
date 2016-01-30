@@ -1,5 +1,5 @@
-var pubnub = require('../services/pubnub-service'),
-	localStorage = localStorage || new (require('node-localstorage').LocalStorage)('./localstorage');
+var pubsubService = require('../services/pubsub-service'),
+	localStorage = window.localStorage || new (require('node-localstorage').LocalStorage)('./localstorage');
 
 function LocalEnvironmentProvider() {
 	var self = this,
@@ -12,7 +12,7 @@ function LocalEnvironmentProvider() {
 		
 		if(!localEnvironmentInfo) {
 			localEnvironmentInfo = {
-				id: pubnub.uuid()
+				id: pubsubService.uuid()
 			};
 			
 			try {
